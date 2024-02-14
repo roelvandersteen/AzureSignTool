@@ -1,24 +1,29 @@
 ﻿using System.Xml.Linq;
-using System.Xml.XPath;
 
 namespace ReSignMsixBundle.BusinessLogic;
 
-[SupportedOSPlatform("windows")] internal static class PackagePublisherTool
+[SupportedOSPlatform("windows")] internal sealed class PackagePublisherTool(ILogger logger)
 {
     /// <summary>Modify the package publisher in the manifests of a list of MSIX files.</summary>
     /// <param name="msixFiles">The MSIX files.</param>
     /// <param name="publisher">The publisher.</param>
     /// <param name="cancellationToken">A token that allows processing to be cancelled.</param>
-    public static void ModifyPackagePublisher(IEnumerable<string> msixFiles, string publisher, CancellationToken cancellationToken)
+    public void ModifyPackagePublisher(ICollection<string> msixFiles, string publisher, CancellationToken cancellationToken)
     {
+        var modifiedCount = 0;
         foreach (var msixFile in msixFiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ModifyPackagePublisher(msixFile, publisher);
+            if (ModifyPackagePublisher(msixFile, publisher))
+            {
+                modifiedCount++;
+            }
         }
+
+        logger.LogInformation("Modified {ModifiedCount} of {TotalCount} MSIX files", modifiedCount, msixFiles.Count);
     }
 
-    private static void ModifyPackagePublisher(string msixFile, string publisher)
+    private bool ModifyPackagePublisher(string msixFile, string publisher)
     {
         var manifestPath = string.Empty;
         using (var zip = ZipFile.OpenRead(msixFile))
@@ -33,7 +38,11 @@ namespace ReSignMsixBundle.BusinessLogic;
                 manifestPath = Path.Combine(Path.GetTempPath(), entry.Name);
                 entry.ExtractToFile(manifestPath, true);
 
-                ModifyPublisherInManifest(manifestPath, publisher);
+                if (!ModifyPublisherInManifest(manifestPath, publisher))
+                {
+                    return false;
+                }
+
                 break;
             }
         }
@@ -44,16 +53,21 @@ namespace ReSignMsixBundle.BusinessLogic;
         }
 
         new AppxPackageEditorWrapper().UpdatePackageManifest(msixFile, manifestPath);
+        return true;
     }
 
-    private static void ModifyPublisherInManifest(string manifestPath, string publisher)
+    private bool ModifyPublisherInManifest(string manifestPath, string publisher)
     {
         var xmlDoc = XDocument.Load(manifestPath);
-        if (xmlDoc.XPathEvaluate("//*[local-name()='Identity']/@Publisher") is XAttribute publisherAttribute)
+        var publisherAttribute = xmlDoc.Descendants().FirstOrDefault(x => x.Name.LocalName == "Identity")?.Attribute("Publisher");
+        if (publisherAttribute == null)
         {
-            publisherAttribute.Value = publisher;
+            logger.LogWarning("Could not find Publisher attribute in manifest {ManifestPath}", manifestPath);
+            return false;
         }
 
+        publisherAttribute.Value = publisher;
         xmlDoc.Save(manifestPath);
+        return true;
     }
 }

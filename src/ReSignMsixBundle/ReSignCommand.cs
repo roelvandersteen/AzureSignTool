@@ -100,7 +100,7 @@ internal sealed class ReSignCommand
         var publisherName = (await File.ReadAllTextAsync(PublisherNameFile, cancellationToken).ConfigureAwait(false)).Trim();
 
         logger.LogInformation("Manifests in the MSIX files are modified to reflect publisher: {PublisherName}", publisherName);
-        PackagePublisherTool.ModifyPackagePublisher(msixFiles, publisherName, cancellationToken);
+        new PackagePublisherTool(logger).ModifyPackagePublisher(msixFiles, publisherName, cancellationToken);
         if (cancellationToken.IsCancellationRequested)
         {
             return HRESULT.E_ALL_FAILED;
