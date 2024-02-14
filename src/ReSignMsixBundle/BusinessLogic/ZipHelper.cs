@@ -44,13 +44,13 @@ internal class ZipHelper(ILogger logger) : IDisposable
                         continue;
                     }
 
-                    var entryDestination = Path.Combine(TempDirectory, entry.Name);
+                    var entryDestination = Path.Combine(TempDirectory, Uri.UnescapeDataString(entry.Name));
                     entry.ExtractToFile(entryDestination, true);
                     files.Add(entryDestination);
                 }
             }
 
-            logger.LogInformation("MSIX bundle contents extracted to: {TempDirectory}", TempDirectory);
+            logger.LogInformation("MSIX bundle contents extracted to: {TempDirectory} - {Count} files", TempDirectory, files.Count);
         }
         catch (Exception ex)
         {
